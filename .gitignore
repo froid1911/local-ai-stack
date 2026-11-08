@@ -1,0 +1,20 @@
+# Secrets and local runtime state
+.env
+**/.env
+*.db
+*.db-shm
+*.db-wal
+*.log
+sessions/
+credentials/
+*.jsonl
+
+# Model weights and packs
+*.gguf
+*.safetensors
+*.bin
+models/
+Strata-data/
+
+# Editor / OS noise
+.DS_Store

@@ -1,0 +1,51 @@
+{
+ "exe": "/home/froid/strata/engine-dsv41/0.1.57-linux-x86_64-cuda-cuda13/strata-dsv41",
+ "args": [
+  "--pack",
+  "/home/froid/Strata-data/packs/deepseek-v4.1-flash-ist-das-2.25bpw",
+  "--max-context",
+  "262144",
+  "--eos",
+  "1",
+  "--vision",
+  "off",
+  "--dspark",
+  "auto",
+  "--dspark-conf",
+  "0.65",
+  "--tp",
+  "2"
+ ],
+ "cwd": "/home/froid/.local/share/strata/components/control/0.1.55",
+ "tokenizer": "/home/froid/Strata-data/packs/deepseek-v4.1-flash-ist-das-2.25bpw/tokenizer",
+ "model_name": "deepseek-v4.1-flash",
+ "arch": "deepseek41",
+ "log": "/home/froid/strata/strata-deepseek-v4.1-flash-ist-das-2.25bpw.log",
+ "lib_dirs": [
+  "/home/froid/strata/engine-dsv41/0.1.57-linux-x86_64-cuda-cuda13"
+ ],
+ "port": 8080,
+ "engine_ready_s": 3600,
+ "gpu": [
+  0,
+  1,
+  2
+ ],
+ "gpus_asked": true,
+ "args_written": [
+  "--pack",
+  "/home/froid/Strata-data/packs/deepseek-v4.1-flash-ist-das-2.25bpw",
+  "--max-context",
+  "262144",
+  "--eos",
+  "1",
+  "--vision",
+  "off",
+  "--dspark",
+  "auto",
+  "--dspark-conf",
+  "0.65",
+  "--tp",
+  "2"
+ ]
+}

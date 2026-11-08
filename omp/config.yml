@@ -1,0 +1,20 @@
+providers:
+  maxInFlightRequests:
+    vllm: 8
+  streamFirstEventTimeoutSeconds: 600
+setupVersion: 3
+modelRoles:
+  slow: strata-dsv41/deepseek-v4.1-flash:auto
+  plan: "strata-dsv41/deepseek-v4.1-flash,openrouter/deepseek/deepseek-v4.1-flash-1017"
+  task: "strata-dsv41/deepseek-v4.1-flash,openrouter/deepseek/deepseek-v4.1-flash-1017"
+  commit: strata-dsv41/deepseek-v4.1-flash:auto
+  tiny: "local/lfm2.5-350m,strata-dsv41/deepseek-v4.1-flash"
+  vision: strata/qwen3.8-flash-next-iq3_s:auto
+  worker: strata-dsv41/deepseek-v4.1-flash:auto
+  review: strata-dsv41/deepseek-v4.1-flash
+  default: "strata-dsv41/deepseek-v4.1-flash,openrouter/deepseek/deepseek-v4.1-flash-1017"
+  smol: strata-dsv41/deepseek-v4.1-flash:auto
+defaultThinkingLevel: auto
+hideThinkingBlock: true
+update:
+  auto: false

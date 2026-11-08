@@ -1,0 +1,62 @@
+onboarding = false
+
+[theme]
+name = "catppuccin"
+auto_switch = false
+
+[ui]
+sidebar_width = 30
+agent_panel_scope = "all"
+agent_panel_sort = "priority"
+show_agent_labels_on_pane_borders = true
+prompt_new_tab_name = false
+confirm_close = true
+
+[ui.toast]
+delivery = "herdr"
+delay_seconds = 1
+
+[ui.sound]
+enabled = true
+
+[terminal]
+new_cwd = "follow"
+shell_mode = "auto"
+
+[worktrees]
+directory = "~/.herdr/worktrees"
+
+[session]
+resume_agents_on_restore = true
+
+[keys]
+# Prefix-free chords from the official keyboard guide. Prefix bindings remain.
+focus_pane_left = ["prefix+h", "ctrl+alt+h"]
+focus_pane_down = ["prefix+j", "ctrl+alt+j"]
+focus_pane_up = ["prefix+k", "ctrl+alt+k"]
+focus_pane_right = ["prefix+l", "ctrl+alt+shift+l"]
+previous_tab = ["prefix+p", "ctrl+alt+["]
+next_tab = ["prefix+n", "ctrl+alt+]"]
+new_tab = ["prefix+c", "ctrl+alt+c"]
+split_vertical = ["prefix+v", "ctrl+alt+d"]
+split_horizontal = ["prefix+minus", "ctrl+alt+shift+d"]
+zoom = ["prefix+z", "ctrl+alt+z"]
+
+# Installed plugins from the awesome-herdr marketplace.
+[[keys.command]]
+key = "ctrl+alt+b"
+type = "plugin_action"
+command = "herdr-bar.open"
+description = "Fuzzy jump to tab, pane, or agent (herdr-bar)"
+
+[[keys.command]]
+key = "ctrl+alt+r"
+type = "plugin_action"
+command = "persiyanov.reviewr.toggle"
+description = "Toggle reviewr diff pane"
+
+[[keys.command]]
+key = "ctrl+alt+g"
+type = "shell"
+command = "herdr plugin pane open --plugin triage --entrypoint list --placement split"
+description = "Open agent triage pane"

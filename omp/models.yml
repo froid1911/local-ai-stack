@@ -1,0 +1,199 @@
+providers:
+  # Tess-4.5-27B (Qwen3.8-27B finetune) on llama.cpp, GPUs 2+3.
+  # Q4_K_M + MTP draft, 262k ctx, q4_0 KV, vision projector.
+  # Measured ~57-65 tok/s decode (thinking on, MTP). Keyless local endpoint.
+  tess:
+    baseUrl: http://127.0.0.1:18090/v1
+    auth: none
+    api: openai-completions
+    discovery:
+      type: openai-models-list
+    modelOverrides:
+      tess-4.5:
+        input: [text, image]
+        imageInputDecoder: stb
+        tokenizer: qwen3
+        reasoning: true
+        contextWindow: 262144
+        thinking:
+          mode: effort
+          efforts: [low, medium, xhigh]
+        compat:
+          qwenTemplateReasoningEffort: true
+          reasoningContentField: reasoning_content
+
+  # Local vLLM on this host. Two servers, disjoint GPU pairs, TP=2, 262k ctx,
+  # fp8 KV, prefix caching on. :8002 = the standard Qwen3.8-27B-W4A16-AutoRound;
+  # :8003 = the abliterated UNCENSORED W4A16 AutoRound (noon-at-cgn, same g128-sym
+  # recipe), which replaced the defect canary on 2026-09-12. Models are
+  # discovered from /v1/models and max_model_len becomes the context window.
+
+  # GPUs 0+1 -- both healthy cards. Use this for anything whose output matters.
+  vllm:
+    baseUrl: http://127.0.0.1:8003/v1
+    auth: none
+    modelOverrides:
+      qwen3.8-27b-w4a16:
+        # Multimodal checkpoint: the vision tower is present and kept out of the
+        # int4 quantization. Discovery cannot infer that from /v1/models.
+        input: [text, image]
+        # Qwen tokenizer for accurate context accounting, not the generic estimate.
+        tokenizer: qwen3
+
+  # GPUs 2+3 -- GPU 2 has FAULTY VRAM (1479 bad cells, no ECC, serial 1324221009624).
+  # 2026-09-12: hosts the uncensored W4A16 (replaced the defect canary).
+  # slot8003-check PASSED on this pair (188,902-tok needle retrieved, clean
+  # shallow + deep decode) -- the INT4 layout tolerates the bad cells; FP8 does
+  # not. A failure would still be SILENT (wrong number in fluent output, no
+  # crash): fine for exploratory/uncensored work; keep anything you will act on
+  # over on :8002.
+  vllm-defect:
+    baseUrl: http://127.0.0.1:8003/v1
+    auth: none
+    # vllm-defect is not the built-in `vllm` id, so it gets no automatic
+    # discovery — declare the generic OpenAI-compatible path explicitly.
+    api: openai-completions
+    discovery:
+      type: openai-models-list
+    modelOverrides:
+      qwen3.8-27b-uncensored-w4a16:
+        input: [text, image]
+        tokenizer: qwen3
+        reasoning: true
+        thinking:
+          mode: effort
+          efforts: [low, medium, xhigh]
+
+  # Strata engine (custom C++/CUDA, /home/froid/strata), NOT vLLM. Runs
+  # Qwen3.8-Flash-Next UD-IQ4_XS (125B MoE) with all experts resident in VRAM
+  # across GPUs 0,1,3 -- GPU 2 is excluded (faulty VRAM, see gpu2-faulty-vram).
+  # Mutually exclusive with the vllm providers above: they share GPUs 0+1, so
+  # only one of Strata / vLLM can be up at a time.
+  # Measured 2026-10-07: ~140 tok/s decode (flat), prefill to ~2300 tok/s.
+  # MMLU-Pro 85.8% vs the 27B's 84.1% -- a statistical tie (McNemar p=0.77);
+  # pick it for speed, not for quality.
+  strata:
+    baseUrl: http://127.0.0.1:8090/v1
+    auth: none
+    # Not a built-in provider id, so declare the OpenAI-compatible path
+    # explicitly, same as vllm-defect above.
+    api: openai-completions
+    discovery:
+      type: openai-models-list
+    modelOverrides:
+      qwen3.8-flash-next-unsloth-ud-iq4_xs:
+        input: [text]
+        tokenizer: qwen3
+        reasoning: true
+        # Strata reports its context as meta.n_ctx, which omp's
+        # openai-models-list discovery does not read (it looks for the
+        # top-level max_model_len that vLLM emits). Without this the model
+        # lands on omp's 128000 fallback. Engine runs --max-context 262144.
+        contextWindow: 262144
+
+      # IQ3_S pack (2026-10-08): 46.84 GiB expert arena on GPUs 0,1,3, built by
+      # setup.py into /home/froid/Strata-data/packs/iq3_s. Measured on this rig:
+      # 4,455 tok/s prefill @75K, 112-137 tok/s decode, 99.8% expert-cache hit.
+      # Starts in ~2 min (locked RAM) / ~30 s with --mmap-experts.
+      # Only ONE Strata model is served at a time -- whichever config
+      # local/start-strata-iq3s.sh (IQ3_S) or local/start-strata.sh (IQ4_XS)
+      # was launched with. Both overrides can sit here safely.
+      qwen3.8-flash-next-iq3_s:
+        input: [text]
+        tokenizer: qwen3
+        reasoning: true
+        # Same discovery gap as the IQ4_XS entry: Strata reports its context as
+        # meta.n_ctx, which omp's openai-models-list does not read. Engine runs
+        # --max-context 262144 (model native; setup.py caps its RECOMMENDATION
+        # at 131072 for any card >=20 GB, which is not a limit of this rig).
+        contextWindow: 262144
+
+  # Strata 0.2.12 (DeepSeek engine 0.1.58), DeepSeek-V4.1-Flash-1017 (ISTA-DASLab
+  # GSQ-RCO IQ2_XS, 2.25 bpw). Runs in an Ubuntu 24.04 container because the engine
+  # needs glibc >= 2.34 and this host is 20.04; container `strata-dsv41`, host
+  # network, port 18080. 256K context. Since 2026-11 on THREE 3090s (4th card in
+  # repair): ~6K experts in VRAM, ~10K on CPU (RAM-cached, 24 threads).
+  # Measured 2026-11-08 (500-tok code answers, temp 0): DSpark drafter ON
+  # (--dspark on) 62-66 tok/s decode, 80-90% drafts kept; drafter auto/off 40-44.
+  # ~530 tok/s prefill on a fresh 6.6K prompt; ~2 s fixed overhead per request
+  # with the drafter. Engine 0.1.58's auto mode turns DSpark OFF here -- force it on.
+  # OpenAI-compatible, including tool_calls; reasoning in `reasoning_content`.
+  # Roles default/plan/task fall back to the OpenRouter copy of the same model.
+  strata-dsv41:
+    baseUrl: http://127.0.0.1:18080/v1
+    auth: none
+    # Not a built-in provider id: declare the OpenAI-compatible path explicitly.
+    api: openai-completions
+    # Full custom provider (not discovery): the picker lists these models
+    # unconditionally, and the Strata endpoint reports only meta.n_ctx, which
+    # OMP's openai-models-list discovery does not read.
+    models:
+      - id: deepseek-v4.1-flash
+        name: DeepSeek V4.1 Flash (Strata, local)
+        input: [text]
+        reasoning: true
+        tokenizer: deepseek-v3
+        contextWindow: 262144
+        maxTokens: 32768
+        cost:
+          input: 0
+          output: 0
+          cacheRead: 0
+          cacheWrite: 0
+        thinking:
+          mode: effort
+          efforts: [low, medium, high]
+        compat:
+          reasoningContentField: reasoning_content
+          supportsReasoningEffort: true
+
+  # LiquidAI LFM3-1.7B (Q8_0 GGUF) on llama.cpp, ONE RTX 3090, port 8310.
+  # Start: ~/models/start-lfm3.sh   (bin: ~/llama-cpp-cuda/build master, arch lfm3)
+  # Measured 2026-10-28: 310 tok/s decode, 19.7K tok/s prefill (pp512/pp4096),
+  # 142K-token needle retrieved verbatim. Weights 1.85 GB + q8_0 KV 1.6 GB at
+  # the native 262144 ctx, so it fits on a single card with ~20 GB spare.
+  # Chat template is ChatML + `think`; llama-server parses the model's
+  # <tool_call><function=..><parameter=..> XML into native OpenAI tool_calls
+  # (Qwen3-Coder detector), so no in-band dialect is needed. Thinking is an
+  # on/off template kwarg (`enable_thinking`), not an effort scale -- the two
+  # effort levels both mean "thinking on"; `off` sends enable_thinking: false.
+  # Card: post-trained on Hermes Agent / Pi / OpenClaw harnesses. OMP is
+  # Pi-lineage, so using the model's own chat template `<tools>` block plus
+  # native tool_calls reproduces the training distribution; do NOT force an
+  # in-band dialect (xml/hermes) here. The template also supports deferred
+  # tools via `tool_reference` -> `<additional_tools>`, which OMP does not use.
+  lfm3:
+    baseUrl: http://127.0.0.1:8310/v1
+    auth: none
+    api: openai-completions
+    discovery:
+      type: openai-models-list
+    modelOverrides:
+      lfm3-1.7b:
+        name: LFM3 1.7B (local, llama.cpp)
+        input: [text]
+        reasoning: true
+        contextWindow: 262144
+        thinking:
+          mode: effort
+          efforts: [low, high]
+          defaultLevel: low
+          # Verified: chat_template_kwargs {enable_thinking:false} yields a
+          # clean non-thinking answer, so `off` must not be clamped.
+          requiresEffort: false
+        compat:
+          reasoningContentField: reasoning_content
+          # LFM3's template reads enable_thinking from chat_template_kwargs.
+          thinkingFormat: qwen-chat-template
+          # llama.cpp serves a string-only tool_choice.
+          supportsNamedToolChoice: false
+
+  # OpenRouter (built-in provider id): cloud fallback / default. Reads
+  # OPENROUTER_API_KEY from .env. Added 2026-10-19. The model is a reasoning
+  # model -- final answer in `content`, chain-of-thought in `reasoning` -- so
+  # `reasoning: true`, same as the local reasoning models above. 1M context.
+  openrouter:
+    modelOverrides:
+      deepseek/deepseek-v4.1-flash-1017:
+        reasoning: true
+        contextWindow: 1048576
